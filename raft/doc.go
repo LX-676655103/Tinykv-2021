@@ -235,7 +235,8 @@ stale log entries:
 	method and the message's Term is lower than leader's or candidate's,
 	'MessageType_MsgRequestVote' will be rejected ('MessageType_MsgRequestVoteResponse' is returned with Reject true).
 	If leader or candidate receives 'MessageType_MsgRequestVote' with higher term, it will revert
-	back to follower. When 'MessageType_MsgRequestVote' is passed to follower, it votes for the
+	back to follower.
+    When 'MessageType_MsgRequestVote' is passed to follower, it votes for the
 	sender only when sender's last term is greater than MessageType_MsgRequestVote's term or
 	sender's last term is equal to MessageType_MsgRequestVote's term but sender's last committed
 	index is greater than or equal to follower's.
