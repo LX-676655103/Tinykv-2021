@@ -35,7 +35,7 @@ func newMemoryStorageWithEnts(ents []pb.Entry) *MemoryStorage {
 // nextEnts returns the appliable entries and updates the applied index
 func nextEnts(r *Raft, s *MemoryStorage) (ents []pb.Entry) {
 	// Transfer all unstable entries to "stable" storage.
-	s.Append(r.RaftLog.unstableEntries())
+	s.Append(r.RaftLog.entries)
 	r.RaftLog.stabled = r.RaftLog.LastIndex()
 
 	ents = r.RaftLog.nextEnts()
@@ -155,6 +155,7 @@ func TestLeaderElectionOverwriteNewerLogs2AB(t *testing.T) {
 	// term is pushed ahead to 2.
 	n.send(pb.Message{From: 1, To: 1, MsgType: pb.MessageType_MsgHup})
 	sm1 := n.peers[1].(*Raft)
+
 	if sm1.State != StateFollower {
 		t.Errorf("state = %s, want StateFollower", sm1.State)
 	}
@@ -1606,6 +1607,7 @@ func (nw *network) send(msgs ...pb.Message) {
 	for len(msgs) > 0 {
 		m := msgs[0]
 		p := nw.peers[m.To]
+		//println(m.String())
 		p.Step(m)
 		msgs = append(msgs[1:], nw.filter(p.readMessages())...)
 	}

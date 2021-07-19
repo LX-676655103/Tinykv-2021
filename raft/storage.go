@@ -131,6 +131,7 @@ func (ms *MemoryStorage) Term(i uint64) (uint64, error) {
 	ms.Lock()
 	defer ms.Unlock()
 	offset := ms.ents[0].Index
+
 	if i < offset {
 		return 0, ErrCompacted
 	}
@@ -160,6 +161,7 @@ func (ms *MemoryStorage) FirstIndex() (uint64, error) {
 
 func (ms *MemoryStorage) firstIndex() uint64 {
 	return ms.ents[0].Index + 1
+	//return ms.ents[0].Index
 }
 
 // Snapshot implements the Storage interface.
