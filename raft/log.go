@@ -73,7 +73,7 @@ func newLog(storage Storage) *RaftLog {
 			return ms.ents[0].Index + 1
 		}*/
 		applied:         firstIndex - 1,
-		stabled:         firstIndex - 1,
+		stabled:         lastIndex,
 		entries:         entries,
 		pendingSnapshot: nil,
 		firstIndex:      firstIndex,
