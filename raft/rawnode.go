@@ -169,7 +169,7 @@ func (rn *RawNode) Ready() Ready {
 		// rn.prevHardState = curHardState
 	}
 
-	//rn.Raft.msgs = nil
+	rn.Raft.msgs = nil
 	return ready
 }
 

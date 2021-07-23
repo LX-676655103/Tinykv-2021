@@ -608,8 +608,10 @@ func (r *Raft) handleMsgAppendResponse(m pb.Message) {
 	}
 	sort.Sort(match)
 	Match := match[(len(r.Prs)-1)/2]
+	matchTerm, _ := r.RaftLog.Term(Match)
 	//println("match:", Match, "r.RaftLog.committed:", r.RaftLog.committed)
-	if Match > r.RaftLog.committed {
+	// Raft 永远不会通过计算副本数目的方式去提交一个之前任期内的日志条目
+	if Match > r.RaftLog.committed && matchTerm == r.Term {
 		logTerm, _ := r.RaftLog.Term(Match)
 		if logTerm == r.Term {
 			r.RaftLog.committed = Match
