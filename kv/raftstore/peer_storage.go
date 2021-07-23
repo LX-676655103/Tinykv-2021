@@ -307,8 +307,6 @@ func ClearMeta(engines *engine_util.Engines, kvWB, raftWB *engine_util.WriteBatc
 // Append the given entries to the raft log and update ps.raftState also delete log entries that will
 // never be committed
 func (ps *PeerStorage) Append(entries []eraftpb.Entry, raftWB *engine_util.WriteBatch) error {
-	//println("123456789\n")
-
 	// Your Code Here (2B).
 	if len(entries) == 0 {
 		return nil
@@ -317,6 +315,13 @@ func (ps *PeerStorage) Append(entries []eraftpb.Entry, raftWB *engine_util.Write
 	entLastIndex := entries[len(entries)-1].Index
 	wbFirstIndex, _ := ps.FirstIndex()
 	wbLastIndex, _ := ps.LastIndex()
+
+	//println("old ps.raftState.LastIndex:", ps.raftState.LastIndex)
+	//println("new ps.raftState.LastIndex:", entLastIndex)
+	// update ps.raftState
+	ps.raftState.LastIndex = entLastIndex
+	ps.raftState.LastTerm = entries[len(entries)-1].Term
+
 	if entLastIndex < wbFirstIndex {
 		return nil
 	}
@@ -334,9 +339,6 @@ func (ps *PeerStorage) Append(entries []eraftpb.Entry, raftWB *engine_util.Write
 			raftWB.DeleteMeta(meta.RaftLogKey(ps.region.Id, i))
 		}
 	}
-	// update ps.raftState
-	ps.raftState.LastIndex = entLastIndex
-	ps.raftState.LastTerm = entries[len(entries)-1].Term
 	return nil
 }
 
@@ -358,8 +360,6 @@ func (ps *PeerStorage) ApplySnapshot(snapshot *eraftpb.Snapshot, kvWB *engine_ut
 // SaveReadyState Save memory states to disk.
 // Do not modify ready in this function, this is a requirement to advance the ready object properly later.
 func (ps *PeerStorage) SaveReadyState(ready *raft.Ready) (*ApplySnapResult, error) {
-	//println("987654321\n")
-
 	// Hint: you may call `Append()` and `ApplySnapshot()` in this function
 	// Your Code Here (2B/2C).
 	raftWB := new(engine_util.WriteBatch)
@@ -382,9 +382,17 @@ func (ps *PeerStorage) SaveReadyState(ready *raft.Ready) (*ApplySnapResult, erro
 	if err != nil {
 		return nil, err
 	}
+
 	if !raft.IsEmptyHardState(ready.HardState) {
 		ps.raftState.HardState = &ready.HardState
 	}
+
+	//println("ps.Tag:", ps.Tag)
+	//println("length:", len(ready.Entries))
+	//println("ps.raftState.LastIndex:", ps.raftState.LastIndex)
+	//println("ps.raftState.HardState.Commit:", ps.raftState.HardState.Commit)
+	//println("applyState.AppliedIndex:", ps.applyState.AppliedIndex, "\n")
+
 	err = raftWB.SetMeta(meta.RaftStateKey(ps.region.GetId()), ps.raftState)
 	if err != nil {
 		return nil, err

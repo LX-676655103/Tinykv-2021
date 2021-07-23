@@ -240,7 +240,6 @@ func (r *Raft) sendHeartbeat(to uint64) {
 		To:      to,
 		Term:    r.Term,
 		Commit:  r.RaftLog.committed,
-		Entries: nil,
 	}
 	r.msgs = append(r.msgs, msg)
 }
@@ -471,6 +470,9 @@ func (r *Raft) LeaderStep(m pb.Message) error {
 	case pb.MessageType_MsgSnapshot:
 	case pb.MessageType_MsgHeartbeat: //error
 	case pb.MessageType_MsgHeartbeatResponse:
+		if m.Reject {
+			r.sendAppend(m.From)
+		}
 	case pb.MessageType_MsgTransferLeader:
 	case pb.MessageType_MsgTimeoutNow:
 	}
@@ -546,7 +548,6 @@ func (r *Raft) handleAppendEntries(m pb.Message) {
 	r.electionElapsed -= rand.Intn(r.electionTimeout)
 
 	// Reply reject if doesn’t contain entry at prevLogIndex term matches prevLogTerm
-	index := m.Index
 	lastIndex := r.RaftLog.LastIndex()
 	if m.Index <= lastIndex {
 		LogTerm, _ := r.RaftLog.Term(m.Index)
@@ -563,18 +564,13 @@ func (r *Raft) handleAppendEntries(m pb.Message) {
 						r.RaftLog.entries = r.RaftLog.entries[0 : m.Index-firstIndex+1]
 						lastIndex = r.RaftLog.LastIndex()
 						r.RaftLog.entries = append(r.RaftLog.entries, *entry)
+						r.RaftLog.stabled = m.Index
 					}
 				} else {
 					r.RaftLog.entries = append(r.RaftLog.entries, *entry)
 				}
 			}
-			for _, entry := range r.RaftLog.entries {
-				if entry.Term <= r.Term {
-					index = entry.Index
-				}
-			}
 
-			r.RaftLog.stabled = index
 			// send true AppendResponse
 			r.Vote = None
 			r.sendAppendResponse(m.From, false, r.RaftLog.LastIndex())
@@ -684,7 +680,7 @@ func (r *Raft) handleRequestVote(m pb.Message) {
 // handleHeartbeat handle Heartbeat RPC request
 func (r *Raft) handleHeartbeat(m pb.Message) {
 	// Your Code Here (2A).
-	if m.Term < r.Term {
+	if m.Term < r.Term || r.RaftLog.committed < m.Commit {
 		msg := pb.Message{
 			MsgType: pb.MessageType_MsgHeartbeatResponse,
 			From:    r.id,
@@ -701,7 +697,7 @@ func (r *Raft) handleHeartbeat(m pb.Message) {
 	if m.From != r.Lead {
 		r.Lead = m.From
 	}
-	r.RaftLog.committed = m.Commit
+
 	r.electionElapsed -= rand.Intn(r.electionTimeout)
 	msg := pb.Message{
 		MsgType: pb.MessageType_MsgHeartbeatResponse,

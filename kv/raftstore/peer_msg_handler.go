@@ -44,12 +44,11 @@ func newPeerMsgHandler(peer *peer, ctx *GlobalContext) *peerMsgHandler {
 // HandleRaftReady do corresponding actions like persisting log entries,
 // applying committed entries and sending raft messages to other peers through the network
 func (d *peerMsgHandler) HandleRaftReady() {
-	//println("d.regionId:", d.regionId)
-
 	if d.stopped {
 		return
 	}
 	// Your Code Here (2B).
+	//println("\nd.regionId:", d.regionId, "d.peer.PeerId():",d.peer.PeerId())
 	if !d.RaftGroup.HasReady() {
 		return
 	}
@@ -62,13 +61,14 @@ func (d *peerMsgHandler) HandleRaftReady() {
 	if result != nil {
 
 	}
+
 	// sending raft messages to other peers through the network
 	if len(ready.Messages) != 0 {
 		d.Send(d.ctx.trans, ready.Messages)
 		//println("ready.Messages[0].Index:", ready.Messages[0].Index)
 	}
 	// applying committed entries
-	if len(ready.CommittedEntries) != 0 {
+	if len(ready.CommittedEntries) > 0 {
 		for _, entry := range ready.CommittedEntries {
 			d.process(&entry)
 		}
@@ -83,6 +83,7 @@ func (d *peerMsgHandler) HandleRaftReady() {
 			panic(err)
 		}
 	}
+
 	d.RaftGroup.Advance(ready)
 }
 

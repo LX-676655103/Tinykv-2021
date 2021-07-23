@@ -92,6 +92,7 @@ func (l *RaftLog) maybeCompact() {
 func (l *RaftLog) unstableEntries() []pb.Entry {
 	// Your Code Here (2A).
 	if len(l.entries) > 0 {
+		//println("l.stabled:", l.stabled, "l.FirstIndex():", l.FirstIndex())
 		return l.entries[l.stabled-l.FirstIndex()+1:]
 	}
 	return nil
@@ -100,8 +101,8 @@ func (l *RaftLog) unstableEntries() []pb.Entry {
 // nextEnts returns all the committed but not applied entries
 func (l *RaftLog) nextEnts() (ents []pb.Entry) {
 	// Your Code Here (2A).
-	// println(len(l.entries))
-	// fmt.Printf("l.applied: %d, l.FirstIndex: %d, l.committed: %d\n", l.applied, l.FirstIndex(), l.committed)
+	//println("length:", len(l.entries), "l.applied:", l.applied)
+	//fmt.Printf("l.applied: %d, l.FirstIndex: %d, l.committed: %d\n", l.applied, l.FirstIndex(), l.committed)
 	if len(l.entries) > 0 {
 		return l.entries[l.applied-l.FirstIndex()+1 : l.committed-l.FirstIndex()+1]
 	}
@@ -124,7 +125,7 @@ func (l *RaftLog) FirstIndex() uint64 {
 	// Your Code Here (2A).
 	if len(l.entries) == 0 {
 		i, _ := l.storage.FirstIndex()
-		return i
+		return i - 1
 	}
 	return l.entries[0].Index
 }
