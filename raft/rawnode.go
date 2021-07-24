@@ -169,6 +169,11 @@ func (rn *RawNode) Ready() Ready {
 		// rn.prevHardState = curHardState
 	}
 
+	if !IsEmptySnap(rn.Raft.RaftLog.pendingSnapshot) {
+		ready.Snapshot = *rn.Raft.RaftLog.pendingSnapshot
+		rn.Raft.RaftLog.pendingSnapshot = nil
+	}
+
 	rn.Raft.msgs = nil
 	return ready
 }
@@ -196,6 +201,11 @@ func (rn *RawNode) HasReady() bool {
 		len(rn.Raft.msgs) > 0 || len(rn.Raft.RaftLog.nextEnts()) > 0 {
 		return true
 	}
+
+	if !IsEmptySnap(rn.Raft.RaftLog.pendingSnapshot) {
+		return true
+	}
+
 	return false
 }
 

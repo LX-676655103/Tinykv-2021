@@ -86,13 +86,20 @@ func newLog(storage Storage) *RaftLog {
 // grow unlimitedly in memory
 func (l *RaftLog) maybeCompact() {
 	// Your Code Here (2C).
+	truncatedIndex, _ := l.storage.FirstIndex()
+	if len(l.entries) > 0 {
+		firstIndex := l.entries[0].Index
+		if truncatedIndex > firstIndex {
+			l.entries = l.entries[truncatedIndex-firstIndex:]
+		}
+	}
 }
 
 // unstableEntries return all the unstable entries
 func (l *RaftLog) unstableEntries() []pb.Entry {
 	// Your Code Here (2A).
 	if len(l.entries) > 0 {
-		//println("l.stabled:", l.stabled, "l.FirstIndex():", l.FirstIndex())
+		// println("l.stabled:", l.stabled, "l.FirstIndex():", l.FirstIndex())
 		return l.entries[l.stabled-l.FirstIndex()+1:]
 	}
 	return nil
@@ -114,8 +121,9 @@ func (l *RaftLog) nextEnts() (ents []pb.Entry) {
 func (l *RaftLog) LastIndex() uint64 {
 	// Your Code Here (2A).
 	if len(l.entries) == 0 {
-		i, _ := l.storage.LastIndex()
-		return i
+		//i, _ := l.storage.LastIndex()
+		//return i
+		return l.stabled
 	}
 	//return l.entries[0].Index + uint64(len(l.entries)) - 1
 	return l.entries[len(l.entries)-1].Index
@@ -134,20 +142,6 @@ func (l *RaftLog) FirstIndex() uint64 {
 func (l *RaftLog) Term(i uint64) (uint64, error) {
 	// Your Code Here (2A).
 	// log entries which are not persisted to storage
-	/* offset := l.stabled
-	if i > offset {
-		index := i - l.entries[0].Index
-		if index >= uint64(len(l.entries)) {
-			return 0, ErrUnavailable
-		}
-		return l.entries[index].Term, nil
-	}
-	// please find in the storage
-	term, err := l.storage.Term(i)
-	if err != nil {
-		return 0, err
-	}
-	return term, nil */
 	if len(l.entries) > 0 {
 		offset := l.FirstIndex()
 		if i >= offset {
@@ -160,9 +154,10 @@ func (l *RaftLog) Term(i uint64) (uint64, error) {
 	}
 	// please find in the storage
 	term, err := l.storage.Term(i)
-	if err != nil {
-		return 0, err
+	if err == ErrUnavailable && !IsEmptySnap(l.pendingSnapshot) {
+		if i < l.pendingSnapshot.Metadata.Index {
+			err = ErrCompacted
+		}
 	}
-	return term, nil
-
+	return term, err
 }

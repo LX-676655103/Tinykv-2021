@@ -5,6 +5,7 @@ import (
 	"github.com/pingcap-incubator/tinykv/kv/raftstore/meta"
 	"github.com/pingcap-incubator/tinykv/kv/util/engine_util"
 	"github.com/pingcap-incubator/tinykv/proto/pkg/eraftpb"
+	"reflect"
 	"time"
 
 	"github.com/Connor1996/badger/y"
@@ -58,8 +59,8 @@ func (d *peerMsgHandler) HandleRaftReady() {
 	if err != nil {
 		return
 	}
-	if result != nil {
-
+	if result != nil && !reflect.DeepEqual(result.PrevRegion, result.Region) {
+		d.peerStorage.SetRegion(result.Region)
 	}
 
 	// sending raft messages to other peers through the network
@@ -83,13 +84,13 @@ func (d *peerMsgHandler) HandleRaftReady() {
 			panic(err)
 		}
 	}
-
 	d.RaftGroup.Advance(ready)
 }
 
 func (d *peerMsgHandler) process(entry *eraftpb.Entry) {
 	kvWB := new(engine_util.WriteBatch)
 	if entry.EntryType == eraftpb.EntryType_EntryConfChange {
+		// 3A
 		return
 	}
 	msg := &raft_cmdpb.RaftCmdRequest{}
@@ -98,6 +99,24 @@ func (d *peerMsgHandler) process(entry *eraftpb.Entry) {
 		panic(err)
 	}
 	if len(msg.Requests) == 0 {
+		if msg.AdminRequest != nil {
+			req := msg.AdminRequest
+			switch req.CmdType {
+			case raft_cmdpb.AdminCmdType_CompactLog:
+				compactLog := req.GetCompactLog()
+				if compactLog.CompactIndex >= d.peerStorage.applyState.TruncatedState.Index {
+					d.peerStorage.applyState.TruncatedState.Index = compactLog.CompactIndex
+					d.peerStorage.applyState.TruncatedState.Term = compactLog.CompactTerm
+					kvWB.SetMeta(meta.ApplyStateKey(d.regionId), d.peerStorage.applyState)
+					err = kvWB.WriteToDB(d.peerStorage.Engines.Kv)
+					if err != nil {
+						panic(err)
+					}
+					d.ScheduleCompactLog(compactLog.CompactIndex)
+				}
+			case raft_cmdpb.AdminCmdType_Split:
+			}
+		}
 		return
 	}
 
@@ -242,19 +261,30 @@ func (d *peerMsgHandler) proposeRaftCommand(msg *raft_cmdpb.RaftCmdRequest, cb *
 				cb.Done(ErrResp(err))
 				continue
 			}
-			data, err := msg.Marshal()
-			if err != nil && data != nil {
+			data, err1 := msg.Marshal()
+			if err1 != nil && data != nil {
 				panic(err)
 			}
 			p := &proposal{index: d.nextProposalIndex(), term: d.Term(), cb: cb}
 			d.proposals = append(d.proposals, p)
-			err = d.RaftGroup.Propose(data)
-			if err != nil {
+			err1 = d.RaftGroup.Propose(data)
+			if err1 != nil {
 				continue
 			}
 		}
 	} else if msg.AdminRequest != nil {
-
+		req := msg.AdminRequest
+		switch req.CmdType {
+		case raft_cmdpb.AdminCmdType_ChangePeer: // 3A
+		case raft_cmdpb.AdminCmdType_CompactLog:
+			data, err := msg.Marshal()
+			if err != nil {
+				panic(err)
+			}
+			d.RaftGroup.Propose(data)
+		case raft_cmdpb.AdminCmdType_TransferLeader: // 3A
+		case raft_cmdpb.AdminCmdType_Split: // 3A
+		}
 	}
 }
 
