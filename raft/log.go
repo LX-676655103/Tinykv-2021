@@ -99,6 +99,10 @@ func (l *RaftLog) maybeCompact() {
 func (l *RaftLog) unstableEntries() []pb.Entry {
 	// Your Code Here (2A).
 	if len(l.entries) > 0 {
+		if (l.stabled-l.FirstIndex()+1 < 0) ||
+			(l.stabled-l.FirstIndex()+1 > uint64(len(l.entries))) {
+			return nil
+		}
 		// println("l.stabled:", l.stabled, "l.FirstIndex():", l.FirstIndex())
 		return l.entries[l.stabled-l.FirstIndex()+1:]
 	}

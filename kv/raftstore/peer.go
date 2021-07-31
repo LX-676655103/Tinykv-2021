@@ -111,8 +111,8 @@ type peer struct {
 	ApproximateSize *uint64
 }
 
-func NewPeer(storeId uint64, cfg *config.Config, engines *engine_util.Engines, region *metapb.Region, regionSched chan<- worker.Task,
-	meta *metapb.Peer) (*peer, error) {
+func NewPeer(storeId uint64, cfg *config.Config, engines *engine_util.Engines,
+	region *metapb.Region, regionSched chan<- worker.Task, meta *metapb.Peer) (*peer, error) {
 	if meta.GetId() == util.InvalidID {
 		return nil, fmt.Errorf("invalid peer id")
 	}
@@ -124,7 +124,6 @@ func NewPeer(storeId uint64, cfg *config.Config, engines *engine_util.Engines, r
 	}
 
 	appliedIndex := ps.AppliedIndex()
-
 	raftCfg := &raft.Config{
 		ID:            meta.GetId(),
 		ElectionTick:  cfg.RaftElectionTimeoutTicks,
@@ -147,7 +146,6 @@ func NewPeer(storeId uint64, cfg *config.Config, engines *engine_util.Engines, r
 		Tag:                   tag,
 		ticker:                newTicker(region.GetId(), cfg),
 	}
-
 	// If this region has only one peer and I am the one, campaign directly.
 	if len(region.GetPeers()) == 1 && region.GetPeers()[0].GetStoreId() == storeId {
 		err = p.RaftGroup.Campaign()
@@ -155,7 +153,6 @@ func NewPeer(storeId uint64, cfg *config.Config, engines *engine_util.Engines, r
 			return nil, err
 		}
 	}
-
 	return p, nil
 }
 

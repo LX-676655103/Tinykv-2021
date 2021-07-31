@@ -123,8 +123,14 @@ func (rn *RawNode) ApplyConfChange(cc pb.ConfChange) *pb.ConfState {
 	}
 	switch cc.ChangeType {
 	case pb.ConfChangeType_AddNode:
+
+		println("id:", rn.Raft.id, "addNode", cc.NodeId)
+
 		rn.Raft.addNode(cc.NodeId)
 	case pb.ConfChangeType_RemoveNode:
+
+		println("id:", rn.Raft.id, "removeNode", cc.NodeId)
+
 		rn.Raft.removeNode(cc.NodeId)
 	default:
 		panic("unexpected conf type")
@@ -222,6 +228,8 @@ func (rn *RawNode) Advance(rd Ready) {
 	if len(rd.CommittedEntries) > 0 {
 		rn.Raft.RaftLog.applied = rd.CommittedEntries[len(rd.CommittedEntries)-1].Index
 	}
+
+	println("\n", rn.Raft.id, "stabled:", rn.Raft.RaftLog.stabled, "applied:", rn.Raft.RaftLog.applied)
 	rn.Raft.RaftLog.maybeCompact()
 }
 

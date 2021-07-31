@@ -181,7 +181,10 @@ func (c *Cluster) AllocPeer(storeID uint64) *metapb.Peer {
 
 func (c *Cluster) Request(key []byte, reqs []*raft_cmdpb.Request, timeout time.Duration) (*raft_cmdpb.RaftCmdResponse, *badger.Txn) {
 	startTime := time.Now()
+
+	println("\nCluster.Request:")
 	for i := 0; i < 10 || time.Now().Sub(startTime) < timeout; i++ {
+		println("No.", i, "Request", "length of req:", len(reqs))
 		region := c.GetRegion(key)
 		regionID := region.GetId()
 		req := NewRequest(regionID, region.RegionEpoch, reqs)

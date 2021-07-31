@@ -1224,6 +1224,7 @@ func TestCommitAfterRemoveNode3A(t *testing.T) {
 		Index:   ccIndex,
 		Term:    r.Term,
 	})
+
 	ents := nextEnts(r, s)
 	if len(ents) != 2 {
 		t.Fatalf("expected two committed entries, got %v", ents)
