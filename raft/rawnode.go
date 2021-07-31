@@ -229,7 +229,7 @@ func (rn *RawNode) Advance(rd Ready) {
 		rn.Raft.RaftLog.applied = rd.CommittedEntries[len(rd.CommittedEntries)-1].Index
 	}
 
-	println("\n", rn.Raft.id, "stabled:", rn.Raft.RaftLog.stabled, "applied:", rn.Raft.RaftLog.applied)
+	//println("\n", rn.Raft.id, "stabled:", rn.Raft.RaftLog.stabled, "applied:", rn.Raft.RaftLog.applied)
 	rn.Raft.RaftLog.maybeCompact()
 }
 

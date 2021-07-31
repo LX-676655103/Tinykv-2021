@@ -682,7 +682,6 @@ func TestOneSplit3B(t *testing.T) {
 	resp, _ := cluster.CallCommandOnLeader(&req, time.Second)
 	assert.NotNil(t, resp.GetHeader().GetError())
 	assert.NotNil(t, resp.GetHeader().GetError().GetKeyNotInRegion())
-
 	MustGetEqual(cluster.engines[5], []byte("k100"), []byte("v100"))
 }
 

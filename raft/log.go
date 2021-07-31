@@ -115,6 +115,9 @@ func (l *RaftLog) nextEnts() (ents []pb.Entry) {
 	//println("length:", len(l.entries), "l.applied:", l.applied)
 	//fmt.Printf("l.applied: %d, l.FirstIndex: %d, l.committed: %d\n", l.applied, l.FirstIndex(), l.committed)
 	if len(l.entries) > 0 {
+		if l.committed-l.FirstIndex()+1 < 0 || l.applied-l.FirstIndex()+1 > l.LastIndex() {
+			return nil
+		}
 		return l.entries[l.applied-l.FirstIndex()+1 : l.committed-l.FirstIndex()+1]
 	}
 	return nil

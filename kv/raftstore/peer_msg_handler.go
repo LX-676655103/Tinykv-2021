@@ -227,6 +227,9 @@ func (d *peerMsgHandler) process(entry *eraftpb.Entry, kvWB *engine_util.WriteBa
 					d.ScheduleCompactLog(compactLog.CompactIndex)
 				}
 			case raft_cmdpb.AdminCmdType_Split:
+
+				log.Infof("Region %d peer %d begin to Split", d.regionId, d.PeerId())
+
 				// consider ErrRegionNotFound & ErrKeyNotInRegion & ErrEpochNotMatch
 				// ErrRegionNotFound & ErrEpochNotMatch check in preProposeRaftCommand
 				// but also need to check here to avoid duplicate commands of the same Split
@@ -234,7 +237,10 @@ func (d *peerMsgHandler) process(entry *eraftpb.Entry, kvWB *engine_util.WriteBa
 					regionNotFound := &util.ErrRegionNotFound{RegionId: msg.Header.RegionId}
 					resp := ErrResp(regionNotFound)
 					d.handleProposals(resp, entry)
+					return
 				}
+				log.Infof("Region %d peer %d pass ErrRegionNotFound check", d.regionId, d.PeerId())
+
 				err = util.CheckRegionEpoch(msg, d.Region(), true)
 				if errEpochNotMatching, ok := err.(*util.ErrEpochNotMatch); ok {
 					siblingRegion := d.findSiblingRegion()
@@ -244,20 +250,38 @@ func (d *peerMsgHandler) process(entry *eraftpb.Entry, kvWB *engine_util.WriteBa
 					d.handleProposals(ErrResp(errEpochNotMatching), entry)
 					return
 				}
+				log.Infof("Region %d peer %d pass RegionEpoch check", d.regionId, d.PeerId())
+
 				err = util.CheckKeyInRegion(req.Split.SplitKey, d.Region())
 				if err != nil {
 					d.handleProposals(ErrResp(err), entry)
 					return
 				}
-				// Use `engine_util.ExceedEndKey()` to compare with region’s end key.
-				if !engine_util.ExceedEndKey(req.Split.SplitKey, d.Region().EndKey) {
-					d.handleProposals(ErrResp(&util.ErrStaleCommand{}), entry)
-					return
-				}
+				log.Infof("Region %d peer %d pass KeyInRegion check", d.regionId, d.PeerId())
+
+				//// Use `engine_util.ExceedEndKey()` to compare with region’s end key.
+				//if !engine_util.ExceedEndKey(req.Split.SplitKey, d.Region().EndKey) {
+				//	d.handleProposals(ErrResp(&util.ErrStaleCommand{}), entry)
+				//	return
+				//}
+				log.Infof("Region %d peer %d pass Split all check", d.regionId, d.PeerId())
+
 				// split region & creat new peer
 				// references loadPeers() & start() in kv/raftstore/raftstore.go
 				peers := make([]*metapb.Peer, 0)
+				length := len(d.Region().Peers)
+				// sort to ensure the order between different peers
+				for i := 0; i < length; i++ {
+					for j := 0; j < length-i-1; j++ {
+						if d.Region().Peers[j].Id > d.Region().Peers[j+1].Id {
+							temp := d.Region().Peers[j+1]
+							d.Region().Peers[j+1] = d.Region().Peers[j]
+							d.Region().Peers[j] = temp
+						}
+					}
+				}
 				for i, peer := range d.Region().Peers {
+					// println(i, peer.Id, peer.StoreId)
 					peers = append(peers, &metapb.Peer{Id: req.Split.NewPeerIds[i], StoreId: peer.StoreId})
 				}
 				region := &metapb.Region{
@@ -276,14 +300,15 @@ func (d *peerMsgHandler) process(entry *eraftpb.Entry, kvWB *engine_util.WriteBa
 				}
 				d.ctx.storeMeta.Lock()
 				d.Region().EndKey = req.Split.SplitKey
+				// update RegionEpoch
+				d.Region().RegionEpoch.Version++
 				d.ctx.storeMeta.regionRanges.ReplaceOrInsert(&regionItem{region: d.Region()})
 				d.ctx.storeMeta.regionRanges.ReplaceOrInsert(&regionItem{region: region})
 				d.ctx.storeMeta.regions[req.Split.NewRegionId] = region
 				d.ctx.storeMeta.Unlock()
-				//meta.WriteRegionState(wb, region, rspb.PeerState_Normal)
-				//meta.WriteRegionState(wb, newRegion, rspb.PeerState_Normal)
-				// update RegionEpoch
-				d.Region().RegionEpoch.Version++
+				meta.WriteRegionState(kvWB, region, rspb.PeerState_Normal)
+				meta.WriteRegionState(kvWB, d.Region(), rspb.PeerState_Normal)
+
 				// start
 				d.ctx.router.register(newpeer)
 				_ = d.ctx.router.send(req.Split.NewRegionId,
@@ -299,6 +324,7 @@ func (d *peerMsgHandler) process(entry *eraftpb.Entry, kvWB *engine_util.WriteBa
 					},
 				}
 				d.handleProposals(resp, entry)
+				log.Infof("finish Split")
 			}
 		}
 		return
@@ -446,6 +472,7 @@ func (d *peerMsgHandler) proposeRaftCommand(msg *raft_cmdpb.RaftCmdRequest, cb *
 			err = util.CheckKeyInRegion(key, d.Region())
 			if err != nil && req.CmdType != raft_cmdpb.CmdType_Snap {
 				cb.Done(ErrResp(err))
+				msg.Requests = msg.Requests[1:]
 				continue
 			}
 			data, err1 := msg.Marshal()
@@ -458,7 +485,6 @@ func (d *peerMsgHandler) proposeRaftCommand(msg *raft_cmdpb.RaftCmdRequest, cb *
 			d.proposals = append(d.proposals, p)
 			_ = d.RaftGroup.Propose(data)
 			msg.Requests = msg.Requests[1:]
-
 		}
 	} else if msg.AdminRequest != nil {
 		req := msg.AdminRequest
@@ -504,6 +530,7 @@ func (d *peerMsgHandler) proposeRaftCommand(msg *raft_cmdpb.RaftCmdRequest, cb *
 			p := &proposal{index: d.nextProposalIndex(), term: d.Term(), cb: cb}
 			d.proposals = append(d.proposals, p)
 			_ = d.RaftGroup.Propose(data)
+			log.Infof("%s propose AdminCmdType_Split, r.id %d, ProposalIndex %d", d.Tag, d.Meta.Id, d.nextProposalIndex()-1)
 		}
 	}
 }
@@ -733,7 +760,7 @@ func (d *peerMsgHandler) checkSnapshot(msg *rspb.RaftMessage) (*snap.SnapKey, er
 	meta.Lock()
 	defer meta.Unlock()
 
-	println("PeerId:", d.PeerId(), meta.regions[d.regionId], d.Region())
+	//println("PeerId:", d.PeerId(), meta.regions[d.regionId], d.Region())
 
 	if !util.RegionEqual(meta.regions[d.regionId], d.Region()) {
 		if !d.isInitialized() {
@@ -910,10 +937,7 @@ func (d *peerMsgHandler) onSchedulerHeartbeatTick() {
 	if !d.IsLeader() {
 		return
 	}
-
-	log.Infof("%s HeartbeatScheduler, r.id %d, state %s",
-		d.Tag, d.Meta.Id, d.RaftGroup.Raft.State)
-
+	// log.Infof("%s HeartbeatScheduler, r.id %d, store.id %d, state %s", d.Tag, d.Meta.Id, d.storeID(), d.RaftGroup.Raft.State)
 	d.HeartbeatScheduler(d.ctx.schedulerTaskSender)
 }
 
