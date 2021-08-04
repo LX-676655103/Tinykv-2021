@@ -223,21 +223,23 @@ func (r *Raft) sendSnapshot(to uint64) {
 // current commit index to the given peer. Returns true if a message was sent.
 func (r *Raft) sendAppend(to uint64) bool {
 	// Your Code Here (2A).
+	//println(r.id, "sendAppend to", to)
+
 	if _, ok := r.Prs[to]; !ok {
 		return false
 	}
 	prevIndex := r.Prs[to].Next - 1
+	firstIndex := r.RaftLog.FirstIndex()
 
-	//println("prevIndex:", prevIndex, "firstIndex:", r.RaftLog.FirstIndex())
+	//println(r.id, "send prevIndex:", prevIndex, "firstIndex:", r.RaftLog.FirstIndex())
 
 	prevLogTerm, err := r.RaftLog.Term(prevIndex)
-	if err != nil {
+	if err != nil || prevIndex < firstIndex-1 {
 		r.sendSnapshot(to)
 		return true
 	}
 	var entries []*pb.Entry
 	n := r.RaftLog.LastIndex() + 1
-	firstIndex := r.RaftLog.FirstIndex()
 	for i := prevIndex + 1; i < n; i++ {
 		entries = append(entries, &r.RaftLog.entries[i-firstIndex])
 	}
@@ -256,7 +258,6 @@ func (r *Raft) sendAppend(to uint64) bool {
 	if debug {
 		fmt.Printf("%d send raft message %s from %d to %d\n", r.id, pb.MessageType_MsgAppend, r.id, to)
 	}
-
 	return true
 }
 
@@ -427,6 +428,7 @@ func (r *Raft) Step(m pb.Message) error {
 	// Your Code Here (2A).
 	// for 3A when node has been removed r.Prs is nil or like test delete itself
 
+	// fmt.Printf("%d handle raft message %s from %d to %d\n", r.id, m.MsgType, m.From, m.To)
 	if debug {
 		fmt.Printf("%d handle raft message %s from %d to %d\n", r.id, m.MsgType, m.From, m.To)
 		if _, ok := r.Prs[r.id]; !ok {
@@ -674,12 +676,10 @@ func (r *Raft) handleAppendEntries(m pb.Message) {
 	lastIndex := r.RaftLog.LastIndex()
 
 	//println("m.Index:", m.Index, "lastIndex:", lastIndex)
-
 	if m.Index <= lastIndex {
 		r.RaftLog.FirstIndex()
 		LogTerm, err := r.RaftLog.Term(m.Index)
 		//println("m.LogTerm:", m.LogTerm, "LogTerm:", LogTerm)
-
 		if err != nil && err == ErrCompacted {
 			r.Vote = None
 			r.sendAppendResponse(m.From, false, r.RaftLog.LastIndex())

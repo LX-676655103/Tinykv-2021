@@ -429,8 +429,8 @@ func (ps *PeerStorage) SaveReadyState(ready *raft.Ready) (*ApplySnapResult, erro
 
 	//println("ps.Tag:", ps.Tag)
 	//println("length:", len(ready.Entries))
-	//println("ps.raftState.LastIndex:", ps.raftState.LastIndex)
-	//println("ps.raftState.HardState.Commit:", ps.raftState.HardState.Commit)
+	//println("raftState.LastIndex:", ps.raftState.LastIndex)
+	//println("raftState.HardState.Commit:", ps.raftState.HardState.Commit)
 	//println("applyState.AppliedIndex:", ps.applyState.AppliedIndex, "\n")
 	err = raftWB.SetMeta(meta.RaftStateKey(ps.region.GetId()), ps.raftState)
 	err = raftWB.WriteToDB(ps.Engines.Raft)

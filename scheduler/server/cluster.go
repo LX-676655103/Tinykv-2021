@@ -16,6 +16,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"github.com/pingcap-incubator/tinykv/kv/raftstore/util"
 	"path"
 	"sync"
 	"time"
@@ -279,7 +280,39 @@ func (c *RaftCluster) handleStoreHeartbeat(stats *schedulerpb.StoreStats) error 
 // processRegionHeartbeat updates the region information.
 func (c *RaftCluster) processRegionHeartbeat(region *core.RegionInfo) error {
 	// Your Code Here (3C).
+	// Check whether there is a region with the same Id in local storage
+	if region == nil {
+		return nil
+	}
+	localRegion := c.GetRegion(region.GetID())
+	if localRegion == nil {
+		// scan all regions that overlap with it. The heartbeats’ conf_ver and version
+		// should be greater or equal than all of them, or the region is stale.
+		localRegions := c.ScanRegions(region.GetStartKey(), region.GetEndKey(), -1)
+		for _, local := range localRegions {
+			if region.GetRegionEpoch() == nil || local.GetRegionEpoch() == nil {
+				return errors.New("epoch is null")
+			}
+			if util.IsEpochStale(region.GetRegionEpoch(), local.GetRegionEpoch()) {
+				return errors.New("epoch is stale")
+			}
+		}
+	} else {
+		if util.IsEpochStale(region.GetRegionEpoch(), localRegion.GetRegionEpoch()) {
+			return errors.New("epoch is stale")
+		}
+	}
 
+	// there are two things it should update: region tree and store status.
+	// use PutRegion to update the region tree
+	err := c.putRegion(region)
+	if err != nil {
+		return err
+	}
+	// use UpdateStoreStatus to update related store’s status
+	for storeId := range region.GetStoreIds() {
+		c.updateStoreStatusLocked(storeId)
+	}
 	return nil
 }
 
@@ -357,7 +390,7 @@ func (c *RaftCluster) GetRegionInfoByKey(regionKey []byte) *core.RegionInfo {
 }
 
 // ScanRegions scans region with start key, until the region contains endKey, or
-// total number greater than limit.
+// total number greater than limit. limit <= 0 means no limit.
 func (c *RaftCluster) ScanRegions(startKey, endKey []byte, limit int) []*core.RegionInfo {
 	return c.core.ScanRange(startKey, endKey, limit)
 }

@@ -118,7 +118,9 @@ func (l *RaftLog) nextEnts() (ents []pb.Entry) {
 		if l.committed-l.FirstIndex()+1 < 0 || l.applied-l.FirstIndex()+1 > l.LastIndex() {
 			return nil
 		}
-		return l.entries[l.applied-l.FirstIndex()+1 : l.committed-l.FirstIndex()+1]
+		if l.applied-l.FirstIndex()+1 >= 0 && l.committed-l.FirstIndex()+1 <= uint64(len(l.entries)) {
+			return l.entries[l.applied-l.FirstIndex()+1 : l.committed-l.FirstIndex()+1]
+		}
 	}
 	return nil
 	//return l.entries[l.applied - l.firstIndex + 1 : l.committed - l.firstIndex + 1]

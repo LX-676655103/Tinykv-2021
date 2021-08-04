@@ -182,12 +182,13 @@ func (c *Cluster) AllocPeer(storeID uint64) *metapb.Peer {
 func (c *Cluster) Request(key []byte, reqs []*raft_cmdpb.Request, timeout time.Duration) (*raft_cmdpb.RaftCmdResponse, *badger.Txn) {
 	startTime := time.Now()
 
-	println("\nCluster.Request:")
+	//println("\nCluster.Request:")
 	for i := 0; i < 10 || time.Now().Sub(startTime) < timeout; i++ {
-		println("No.", i, "Request", "length of req:", len(reqs))
+		//println("No.", i, "Request", "length of req:", len(reqs))
 		region := c.GetRegion(key)
 		regionID := region.GetId()
 		req := NewRequest(regionID, region.RegionEpoch, reqs)
+		//println("No.", i, "Request generate")
 		resp, txn := c.CallCommandOnLeader(&req, timeout)
 		if resp == nil {
 			// it should be timeouted innerly
@@ -212,6 +213,8 @@ func (c *Cluster) CallCommandOnLeader(request *raft_cmdpb.RaftCmdRequest, timeou
 	startTime := time.Now()
 	regionID := request.Header.RegionId
 	leader := c.LeaderOfRegion(regionID)
+	//println( regionID, "region get leader:", leader.Id, "store id:", leader.StoreId)
+
 	for {
 		if time.Now().Sub(startTime) > timeout {
 			return nil, nil
@@ -219,6 +222,7 @@ func (c *Cluster) CallCommandOnLeader(request *raft_cmdpb.RaftCmdRequest, timeou
 		if leader == nil {
 			panic(fmt.Sprintf("can't get leader of region %d", regionID))
 		}
+
 		request.Header.Peer = leader
 		resp, txn := c.CallCommand(request, 1*time.Second)
 		if resp == nil {

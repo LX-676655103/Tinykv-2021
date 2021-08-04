@@ -48,7 +48,8 @@ func (d *peerMsgHandler) HandleRaftReady() {
 		return
 	}
 	// Your Code Here (2B).
-	//println("\nd.regionId:", d.regionId, "d.peer.PeerId():",d.peer.PeerId())
+	// println("d.regionId:", d.regionId, "d.peer.PeerId():",d.peer.PeerId())
+
 	if !d.RaftGroup.HasReady() {
 		return
 	}
@@ -73,6 +74,8 @@ func (d *peerMsgHandler) HandleRaftReady() {
 	// applying committed entries
 	if len(ready.CommittedEntries) > 0 {
 		for _, entry := range ready.CommittedEntries {
+			// println(d.PeerId(), "d.regionId:", d.regionId, "entry.Index:", entry.Index, "entry.Index:", entry.Term)
+
 			kvWB := new(engine_util.WriteBatch)
 			if entry.EntryType == eraftpb.EntryType_EntryConfChange {
 				d.processConfChange(&entry, kvWB)
@@ -123,8 +126,7 @@ func (d *peerMsgHandler) handleProposals(resp *raft_cmdpb.RaftCmdResponse, entry
 	if len(d.proposals) > 0 {
 		p := d.proposals[0]
 
-		println("Callback No.", p.index, "proposal", "entry.Index:", entry.Index)
-
+		// println("Callback No.", p.index, "proposal", "entry.Index:", entry.Index)
 		for p.index < entry.Index {
 			p.cb.Done(ErrResp(&util.ErrStaleCommand{}))
 			d.proposals = d.proposals[1:]
@@ -344,7 +346,7 @@ func (d *peerMsgHandler) process(entry *eraftpb.Entry, kvWB *engine_util.WriteBa
 		if len(d.proposals) > 0 {
 			p := d.proposals[0]
 
-			println("Callback No.", p.index, "proposal", "entry.Index:", entry.Index)
+			// println("Callback No.", p.index, "proposal", "entry.Index:", entry.Index)
 
 			for p.index < entry.Index {
 				p.cb.Done(ErrResp(&util.ErrStaleCommand{}))
@@ -402,6 +404,8 @@ func (d *peerMsgHandler) HandleMsg(msg message.Msg) {
 	case message.MsgTypeSplitRegion:
 		split := msg.Data.(*message.MsgSplitRegion)
 		log.Infof("%s on split with %v", d.Tag, split.SplitKey)
+		log.Infof("%s on old version %d, old config version %d", d.Tag, d.Region().RegionEpoch.Version, d.Region().RegionEpoch.ConfVer)
+		log.Infof("%s on split version %d, config version %d", d.Tag, split.RegionEpoch.Version, split.RegionEpoch.ConfVer)
 		d.onPrepareSplitRegion(split.RegionEpoch, split.SplitKey, split.Callback)
 	case message.MsgTypeRegionApproximateSize:
 		d.onApproximateRegionSize(msg.Data.(uint64))
@@ -481,7 +485,7 @@ func (d *peerMsgHandler) proposeRaftCommand(msg *raft_cmdpb.RaftCmdRequest, cb *
 			}
 			p := &proposal{index: d.nextProposalIndex(), term: d.Term(), cb: cb}
 
-			println("Propose No.", d.nextProposalIndex(), "proposal")
+			// println("Propose No.", d.nextProposalIndex(), "proposal")
 			d.proposals = append(d.proposals, p)
 			_ = d.RaftGroup.Propose(data)
 			msg.Requests = msg.Requests[1:]
@@ -517,12 +521,11 @@ func (d *peerMsgHandler) proposeRaftCommand(msg *raft_cmdpb.RaftCmdRequest, cb *
 			}
 			cb.Done(resp)
 		case raft_cmdpb.AdminCmdType_Split: // 3B
-			/* err := util.CheckKeyInRegion(req.Split.SplitKey, d.Region())
+			err := util.CheckKeyInRegion(req.Split.SplitKey, d.Region())
 			if err != nil {
 				cb.Done(ErrResp(err))
 				return
-			} */
-
+			}
 			data, err := msg.Marshal()
 			if err != nil {
 				panic(err)
@@ -937,7 +940,7 @@ func (d *peerMsgHandler) onSchedulerHeartbeatTick() {
 	if !d.IsLeader() {
 		return
 	}
-	// log.Infof("%s HeartbeatScheduler, r.id %d, store.id %d, state %s", d.Tag, d.Meta.Id, d.storeID(), d.RaftGroup.Raft.State)
+	// log.Infof("%s HeartbeatScheduler, r.id %d, region id %d, store.id %d, state %s", d.Tag, d.Meta.Id, d.regionId, d.storeID(), d.RaftGroup.Raft.State)
 	d.HeartbeatScheduler(d.ctx.schedulerTaskSender)
 }
 
