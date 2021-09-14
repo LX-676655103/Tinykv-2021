@@ -167,6 +167,9 @@ func newRaft(c *Config) *Raft {
 	// Your Code Here (2A).
 	// create raft
 	hardState, confState, _ := c.Storage.InitialState()
+	if c.peers == nil {
+		c.peers = confState.Nodes
+	}
 	var raft = &Raft{
 		id:               c.ID,
 		Term:             hardState.Term,
@@ -179,9 +182,7 @@ func newRaft(c *Config) *Raft {
 		heartbeatTimeout: c.HeartbeatTick,
 		electionTimeout:  c.ElectionTick,
 	}
-	if c.peers == nil {
-		c.peers = confState.Nodes
-	}
+
 	if c.Applied > 0 {
 		raft.RaftLog.applied = c.Applied
 	}
@@ -275,7 +276,8 @@ func (r *Raft) sendHeartbeat(to uint64) {
 		From:    r.id,
 		To:      to,
 		Term:    r.Term,
-		Commit:  util.RaftInvalidIndex,
+		// Commit:  r.RaftLog.committed,
+		Commit: util.RaftInvalidIndex,
 	}
 	r.msgs = append(r.msgs, msg)
 }
@@ -611,7 +613,7 @@ func (r *Raft) handleMsgPropose(m pb.Message) {
 		// 3A: conf change confirm
 		if entry.EntryType == pb.EntryType_EntryConfChange {
 			if r.PendingConfIndex > r.RaftLog.applied {
-				r.msgs = append(r.msgs, m)
+				// r.msgs = append(r.msgs, m)
 				return
 			}
 			r.PendingConfIndex = lastIndex + uint64(i) + 1
@@ -674,8 +676,6 @@ func (r *Raft) handleAppendEntries(m pb.Message) {
 
 	// Reply reject if doesn’t contain entry at prevLogIndex term matches prevLogTerm
 	lastIndex := r.RaftLog.LastIndex()
-
-	//println("m.Index:", m.Index, "lastIndex:", lastIndex)
 	if m.Index <= lastIndex {
 		r.RaftLog.FirstIndex()
 		LogTerm, err := r.RaftLog.Term(m.Index)

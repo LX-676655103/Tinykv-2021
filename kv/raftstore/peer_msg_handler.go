@@ -125,7 +125,6 @@ func deleteFromRegion(region *metapb.Region, id uint64) {
 func (d *peerMsgHandler) handleProposals(resp *raft_cmdpb.RaftCmdResponse, entry *eraftpb.Entry) {
 	if len(d.proposals) > 0 {
 		p := d.proposals[0]
-
 		// println("Callback No.", p.index, "proposal", "entry.Index:", entry.Index)
 		for p.index < entry.Index {
 			p.cb.Done(ErrResp(&util.ErrStaleCommand{}))
@@ -502,11 +501,12 @@ func (d *peerMsgHandler) proposeRaftCommand(msg *raft_cmdpb.RaftCmdRequest, cb *
 				Context:    context,
 			}
 			p := &proposal{index: d.nextProposalIndex(), term: d.Term(), cb: cb}
-			d.proposals = append(d.proposals, p)
 			err = d.RaftGroup.ProposeConfChange(cc)
 			if err != nil {
-				panic(err)
+				p.cb.Done(ErrResp(&util.ErrStaleCommand{}))
+				return
 			}
+			d.proposals = append(d.proposals, p)
 		case raft_cmdpb.AdminCmdType_CompactLog:
 			data, err := msg.Marshal()
 			if err != nil {
@@ -940,7 +940,8 @@ func (d *peerMsgHandler) onSchedulerHeartbeatTick() {
 	if !d.IsLeader() {
 		return
 	}
-	// log.Infof("%s HeartbeatScheduler, r.id %d, region id %d, store.id %d, state %s", d.Tag, d.Meta.Id, d.regionId, d.storeID(), d.RaftGroup.Raft.State)
+	//log.Infof("%s HeartbeatScheduler, r.id %d, region id %d, store.id %d, state %s",
+	//	d.Tag, d.Meta.Id, d.regionId, d.storeID(), d.RaftGroup.Raft.State)
 	d.HeartbeatScheduler(d.ctx.schedulerTaskSender)
 }
 

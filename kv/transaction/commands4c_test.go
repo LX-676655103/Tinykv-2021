@@ -398,7 +398,6 @@ func TestScanLimit4C(t *testing.T) {
 // TestScanDeleted4C scan over a value which is deleted then replaced.
 func TestScanDeleted4C(t *testing.T) {
 	builder := builderForScan(t)
-
 	req1 := builder.scanRequest([]byte{100}, 10000)
 	req1.Version = 100
 	req2 := builder.scanRequest([]byte{100}, 10000)
