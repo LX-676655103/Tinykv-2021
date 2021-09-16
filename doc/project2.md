@@ -1204,19 +1204,21 @@ func (l *RaftLog) maybeCompact() {
 			r.RaftLog.entries = r.RaftLog.entries[meta.Index-
 				r.RaftLog.FirstIndex():]
 		}
-	} else {
+	}
+	if len(r.RaftLog.entries) == 0 {
 		r.RaftLog.entries = append(r.RaftLog.entries, pb.Entry{
 			EntryType: pb.EntryType_EntryNormal,
 			Term:      meta.Term,
 			Index:     meta.Index,
 		})
 	}
-
 	r.Prs = make(map[uint64]*Progress)
 	for _, peer := range meta.ConfState.Nodes {
-		r.Prs[peer] = &Progress{}
+		r.Prs[peer] = &Progress{
+			Match: 0,
+			Next:  meta.Index + 1,
+		}
 	}
-
 	r.RaftLog.pendingSnapshot = m.Snapshot
 ```
 
